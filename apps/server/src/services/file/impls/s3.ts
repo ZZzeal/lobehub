@@ -36,12 +36,28 @@ const getPresignedPreviewCacheTtlSeconds = (expiresInSeconds: number) =>
  * S3-based file service implementation
  */
 export class S3StaticFileImpl implements FileServiceImpl {
-  private readonly s3: FileS3;
   private readonly db: LobeChatDatabase;
+
+  /** Built on first use — see the `s3` getter. */
+  private s3Client?: FileS3;
 
   constructor(db: LobeChatDatabase) {
     this.db = db;
-    this.s3 = new FileS3();
+  }
+
+  /**
+   * Lazily build the S3 client.
+   *
+   * `FileService` is constructed in tRPC middleware (e.g. `userProcedure`), so
+   * eager construction here made every `user.*` call fail — including
+   * `getUserState` — on deployments that never configured object storage.
+   * Object storage is optional (`S3_*` are all optional in `fileEnv`), so the
+   * missing-config error now only surfaces on the calls that actually need it.
+   */
+  private get s3(): FileS3 {
+    this.s3Client ??= new FileS3();
+
+    return this.s3Client;
   }
 
   async deleteFile(key: string) {
