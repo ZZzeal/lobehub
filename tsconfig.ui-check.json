@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "apps/**", "node_modules"],
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/business/client/workspaceStore.ts",
+    "src/business/client/trpc-headers.ts",
+    "src/business/client/hooks/useActiveWorkspace.ts",
+    "src/business/client/hooks/useActiveWorkspaceId.ts",
+    "src/business/client/hooks/useActiveWorkspaceSlug.ts",
+    "src/business/client/hooks/useFetchWorkspaceMembers.ts",
+    "src/business/client/hooks/useHasActiveWorkspace.ts",
+    "src/business/client/hooks/useHasWorkspace.ts",
+    "src/business/client/hooks/useIsWorkspaceLoading.ts",
+    "src/business/client/hooks/useIsWorkspaceOwner.ts",
+    "src/business/client/hooks/useIsWorkspaceViewer.ts",
+    "src/business/client/hooks/useSwitchWorkspace.ts",
+    "src/business/client/hooks/useWorkspaceMembers.ts",
+    "src/business/client/hooks/useWorkspaces.ts",
+    "src/features/Workspace/useWorkspaceUrlSync.ts",
+    "src/features/Workspace/useWorkspaceFromSlug.ts",
+    "src/hooks/useWorkspaceRole.ts",
+    "src/features/NavPanel/WorkspaceSwitcher/**/*.tsx"
+  ]
+}

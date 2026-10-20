@@ -20,16 +20,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface SidebarHeaderSelectPopoverProps {
   children: ReactNode;
   content: ReactNode;
+  /**
+   * Anchor side for the panel. `bottomLeft` suits a leading trigger (project /
+   * agent switchers); a trailing trigger near the sidebar's right edge needs
+   * `bottomRight` or the 260-280px panel overflows the viewport.
+   */
+  placement?: 'bottomLeft' | 'bottomRight';
   width?: number;
 }
 
 export const SidebarHeaderSelectPopover = memo<SidebarHeaderSelectPopoverProps>(
-  ({ children, content, width = 280 }) => (
+  ({ children, content, placement = 'bottomLeft', width = 280 }) => (
     <Popover
       classNames={{ trigger: styles.trigger }}
       content={content}
       nativeButton={false}
-      placement={'bottomLeft'}
+      placement={placement}
       trigger={'click'}
       styles={{
         content: {

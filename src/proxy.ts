@@ -13,6 +13,17 @@ export const config = {
     // rather than the HTML redirect-to-signin. Skipping the matcher avoids a
     // needless middleware invocation on the hottest backend traffic. (/oidc and
     // /oauth stay matched below — their middleware pass is still load-bearing.)
+    //
+    // Workspace-scoped routes (`/:workspaceSlug/...`) cannot be enumerated —
+    // the slug is user data — so they need a catch-all entry. Without it those
+    // requests never reach this middleware, Next finds no page for `/acme`,
+    // and it answers 307 back to `/`: a workspace URL then cannot be opened,
+    // bookmarked or shared. Unknown slugs are not special-cased here; the SPA
+    // rewrites as usual and its own slug boundary renders the 404.
+    //
+    // Backend and build-artifact prefixes stay excluded so they skip the
+    // middleware exactly as before.
+    '/((?!api|trpc|webapi|_next|assets|icons|images|locales|favicon|manifest|robots|sitemap).*)',
     // include the /
     '/',
     '/acceptance',
