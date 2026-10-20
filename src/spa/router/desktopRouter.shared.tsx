@@ -152,6 +152,17 @@ const deferPlatformElement = (factory?: () => ReactElement) =>
  * correctly under both `/` (→ `/`) and `/:workspaceSlug` (→ `/:workspaceSlug`).
  */
 export const sharedMainAreaChildren: RouteObject[] = [
+  // Workspace invitations land here after the emailed link. Deliberately not
+  // mirrored under `/:workspaceSlug`: the token decides the workspace, and the
+  // caller is not a member yet, so there is no slug to place them under.
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/invite/[token]'),
+      'Desktop > WorkspaceInvite',
+    ),
+    errorElement: <ErrorBoundary />,
+    path: 'invite/:token',
+  },
   // Chat routes (agent)
   {
     children: [

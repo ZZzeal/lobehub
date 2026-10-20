@@ -23,6 +23,7 @@
     "src/features/Workspace/useWorkspaceUrlSync.ts",
     "src/features/Workspace/useWorkspaceFromSlug.ts",
     "src/hooks/useWorkspaceRole.ts",
-    "src/features/NavPanel/WorkspaceSwitcher/**/*.tsx"
+    "src/features/NavPanel/WorkspaceSwitcher/**/*.tsx",
+    "src/routes/(main)/invite/**/*.tsx"
   ]
 }

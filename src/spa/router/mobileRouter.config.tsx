@@ -31,6 +31,16 @@ const mobileChatElement = dynamicElement(
  * home stay personal-only.
  */
 export const sharedMainAreaChildren: RouteObject[] = [
+  // Workspace invitations: the token decides the workspace, so this path is
+  // never mirrored under `/:workspaceSlug`.
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/invite/[token]'),
+      'Mobile > WorkspaceInvite',
+    ),
+    errorElement: <ErrorBoundary />,
+    path: 'invite/:token',
+  },
   // Chat routes
   {
     children: [

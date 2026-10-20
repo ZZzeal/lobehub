@@ -34,6 +34,10 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   // Personal-only:
   'a',
   'apps',
+  // Invitation landing page: the token decides the workspace, so the segment
+  // must never be read as a slug — otherwise `/invite/xyz` renders the
+  // unknown-workspace 404 before the page can redeem the token.
+  'invite',
   'settings',
   'onboarding',
   'me',
