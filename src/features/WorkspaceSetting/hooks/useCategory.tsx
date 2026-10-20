@@ -33,7 +33,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { usePermission } from '@/hooks/usePermission';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -68,13 +68,10 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { t: tAuth } = useTranslation('auth');
   const { t: tLabs } = useTranslation('labs');
   const { t: tSubscription } = useTranslation('subscription');
-  const { allowed: canManageWorkspace } = usePermission('manage_settings');
-  const { allowed: canViewBilling } = usePermission('view_billing');
-  // API keys act as the member who issued them, so the tab follows the same
-  // member-level gate the server enforces: `API_KEY_*` is granted from Member
-  // up, never to Viewer. Without this the tab leads to a list request that
-  // immediately 403s.
-  const { allowed: canCreateContent } = usePermission('create_content');
+  // Role-derived gates, not `usePermission`: the open-source build stubs that
+  // hook to `allowed: true`, which left every admin-only tab (Provider,
+  // ServiceModel, Storage, AuditLog, billing) visible to members and viewers.
+  const { canEditOwnContent, canManageSettings, canViewBilling } = useWorkspaceRole();
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const enableIntegrations = useUserStore(labPreferSelectors.enableIntegrations);
   // Behind the same experiment that gates the persistent sandbox itself: a tab
@@ -228,14 +225,14 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           items: [
             // AI provider config (keys/endpoints) is shared workspace infra —
             // Admin-or-higher, hidden from members entirely.
-            canManageWorkspace && {
+            canManageSettings && {
               icon: Brain,
               key: WorkspaceSettingsTabs.Provider,
               label: t('tab.provider'),
             },
             // Service-model preferences steer the shared workspace model
             // policy — Admin-or-higher, hidden from members like Provider.
-            canManageWorkspace && {
+            canManageSettings && {
               icon: Sparkles,
               key: WorkspaceSettingsTabs.ServiceModel,
               label: t('tab.serviceModel'),
@@ -269,7 +266,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.agent'),
         },
         // The Admin group is available to Admin and Owner.
-        canManageWorkspace && {
+        canManageSettings && {
           items: [
             {
               icon: Database,
@@ -308,7 +305,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Advanced,
               label: t('tab.advanced'),
             },
-            canCreateContent && {
+            canEditOwnContent && {
               icon: KeyIcon,
               key: WorkspaceSettingsTabs.APIKey,
               label: tAuth('tab.apikey'),
@@ -336,9 +333,9 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       enableOAuthApps,
       enableIntegrations,
       enablePersistentSandbox,
-      canManageWorkspace,
+      canManageSettings,
       canViewBilling,
-      canCreateContent,
+      canEditOwnContent,
       hideDocs,
       avatarUrl,
       username,

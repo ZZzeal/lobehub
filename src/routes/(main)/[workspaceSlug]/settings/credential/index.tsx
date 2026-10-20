@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { createCreateCredModal } from '@/features/Settings/creds/features/CreateCredModal';
 import CredsList from '@/features/Settings/creds/features/CredsList';
 import { type CredsApi, CredsApiProvider } from '@/features/Settings/creds/features/useCredsApi';
-import { usePermission } from '@/hooks/usePermission';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 
@@ -75,7 +75,12 @@ type CredsScope = 'personal' | 'workspace';
 const WorkspaceCredsSetting = () => {
   const { t } = useTranslation('setting');
   const { isAuthenticated } = useMarketAuth();
-  const { allowed: canManageCredentials, reason } = usePermission('manage_provider_key');
+  // Role-derived: the workspace-scope writes are `workspaceAdminProcedure` on
+  // the server, so a member's "new credential" button must start disabled
+  // instead of failing with a 403 after the modal opens.
+  const { canManageSettings } = useWorkspaceRole();
+  const canManageCredentials = canManageSettings;
+  const reason = canManageCredentials ? undefined : t('workspace.general.noPermissionHint');
   const [scope, setScope] = useState<CredsScope>('workspace');
 
   const workspaceCredsApi = useMemo<CredsApi>(

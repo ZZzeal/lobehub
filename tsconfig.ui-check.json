@@ -24,7 +24,10 @@
     "src/features/Workspace/useWorkspaceFromSlug.ts",
     "src/features/Workspace/workspaceSlug.ts",
     "src/business/client/BusinessSettingPages/WorkspaceGeneral.tsx",
+    "src/business/client/BusinessSettingPages/WorkspaceApiKeyGuard.tsx",
     "src/hooks/useWorkspaceRole.ts",
+    "src/features/WorkspaceSetting/AdminOnly.tsx",
+    "src/features/WorkspaceSetting/hooks/useCategory.tsx",
     "src/features/NavPanel/WorkspaceSwitcher/**/*.tsx",
     "src/routes/(main)/invite/**/*.tsx"
   ]

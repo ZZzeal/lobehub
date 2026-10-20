@@ -7,9 +7,13 @@ import { useTranslation } from 'react-i18next';
 import { useIsWorkspaceLoading } from '@/business/client/hooks/useIsWorkspaceLoading';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { MAX_WIDTH } from '@/const/layoutTokens';
-import { usePermission } from '@/hooks/usePermission';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 
-const Forbidden = memo(() => {
+/**
+ * Full-page 403, shared by every workspace gate that has to stop a direct URL
+ * visit (admin-only pages, and the API-key page for viewers).
+ */
+export const WorkspaceForbidden = memo(() => {
   const { t } = useTranslation('error');
   return (
     <Flexbox align={'center'} justify={'center'} style={{ minHeight: '100%', width: '100%' }}>
@@ -40,17 +44,20 @@ const Forbidden = memo(() => {
   );
 });
 
-Forbidden.displayName = 'WorkspaceAdminOnlyForbidden';
+WorkspaceForbidden.displayName = 'WorkspaceForbidden';
 
 const AdminOnly = memo<{ children: ReactNode }>(({ children }) => {
   const isLoading = useIsWorkspaceLoading();
-  const { allowed: canManageWorkspace } = usePermission('manage_settings');
+  // Role-derived, not `usePermission`: the open-source build stubs that hook to
+  // `allowed: true`, so every member could open provider / service-model /
+  // storage / audit-log and only the server's 403 stopped them.
+  const { canManageSettings } = useWorkspaceRole();
 
   // Don't paint the 403 before workspace context resolves — `myRole` is `null`
   // during bootstrap, which would briefly flash the forbidden screen for admins
   // landing directly on the URL.
   if (isLoading) return <RouteLoading />;
-  if (!canManageWorkspace) return <Forbidden />;
+  if (!canManageSettings) return <WorkspaceForbidden />;
   return <>{children}</>;
 });
 

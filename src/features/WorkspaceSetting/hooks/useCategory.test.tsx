@@ -20,20 +20,22 @@ vi.hoisted(() => {
 });
 
 const mocks = vi.hoisted(() => ({
-  canCreateContent: true,
-  canManageWorkspace: true,
+  canEditOwnContent: true,
+  canManageSettings: true,
   canViewBilling: true,
 }));
 
-const permissionFlags: Record<string, () => boolean> = {
-  create_content: () => mocks.canCreateContent,
-  view_billing: () => mocks.canViewBilling,
-};
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: (action: string) => ({
-    allowed: permissionFlags[action]?.() ?? mocks.canManageWorkspace,
-    reason: '',
+// The sidebar gates on the workspace role, not on the always-true
+// `usePermission` stub, so the tests drive the role state directly.
+vi.mock('@/hooks/useWorkspaceRole', () => ({
+  useWorkspaceRole: () => ({
+    canEditOwnContent: mocks.canEditOwnContent,
+    canInvokeModel: mocks.canEditOwnContent,
+    canManageMembers: mocks.canManageSettings,
+    canManageSettings: mocks.canManageSettings,
+    canViewBilling: mocks.canViewBilling,
+    isPersonal: false,
+    role: 'owner',
   }),
 }));
 
@@ -52,8 +54,8 @@ const getItemKeys = () => {
 };
 
 beforeEach(() => {
-  mocks.canCreateContent = true;
-  mocks.canManageWorkspace = true;
+  mocks.canEditOwnContent = true;
+  mocks.canManageSettings = true;
   mocks.canViewBilling = true;
 });
 
@@ -66,8 +68,8 @@ describe('workspace settings useCategory', () => {
   // Account-level tabs follow the user, not the workspace, so they are shown
   // to every role — including viewers with no workspace permissions.
   it('mirrors the account-level tabs in a leading Account group for every role', () => {
-    mocks.canCreateContent = false;
-    mocks.canManageWorkspace = false;
+    mocks.canEditOwnContent = false;
+    mocks.canManageSettings = false;
     mocks.canViewBilling = false;
 
     const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
@@ -91,8 +93,8 @@ describe('workspace settings useCategory', () => {
   });
 
   it('shows About in a System group for every role', () => {
-    mocks.canCreateContent = false;
-    mocks.canManageWorkspace = false;
+    mocks.canEditOwnContent = false;
+    mocks.canManageSettings = false;
     mocks.canViewBilling = false;
 
     const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
@@ -149,7 +151,7 @@ describe('workspace settings useCategory', () => {
   });
 
   it('exposes API Key settings to members', () => {
-    mocks.canManageWorkspace = false;
+    mocks.canManageSettings = false;
 
     const itemKeys = getItemKeys();
     const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
@@ -163,8 +165,8 @@ describe('workspace settings useCategory', () => {
   // Viewers hold no `API_KEY_*` grant, so the tab would open onto a list
   // request that immediately 403s.
   it('hides API Key from viewers but keeps Advanced and Labs in the Developer group', () => {
-    mocks.canCreateContent = false;
-    mocks.canManageWorkspace = false;
+    mocks.canEditOwnContent = false;
+    mocks.canManageSettings = false;
 
     const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const developerGroup = result.current.find(
@@ -178,8 +180,8 @@ describe('workspace settings useCategory', () => {
   });
 
   it('adds OAuth Apps to the viewer Developer group when the Labs preference is enabled', () => {
-    mocks.canCreateContent = false;
-    mocks.canManageWorkspace = false;
+    mocks.canEditOwnContent = false;
+    mocks.canManageSettings = false;
     useUserStore.setState({
       preference: {
         ...initialUserStoreState.preference,

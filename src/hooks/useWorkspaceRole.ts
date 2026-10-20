@@ -9,6 +9,12 @@ export interface WorkspaceRoleState {
   canInvokeModel: boolean;
   canManageMembers: boolean;
   canManageSettings: boolean;
+  /**
+   * Billing surfaces (plans / credits / budget / billing) are Owner-only:
+   * `WORKSPACE_BILLING_READ` is granted to `workspace_owner` alone, so an
+   * Admin opening those pages would hit a 403 from the server.
+   */
+  canViewBilling: boolean;
   /** True when the caller sits in personal scope (no workspace context). */
   isPersonal: boolean;
   role: WorkspaceUiRole;
@@ -49,6 +55,7 @@ export const useWorkspaceRole = (): WorkspaceRoleState => {
     canInvokeModel: role !== 'viewer',
     canManageMembers: canManageSettings,
     canManageSettings,
+    canViewBilling: isPersonal || role === 'owner',
     isPersonal,
     role,
   };

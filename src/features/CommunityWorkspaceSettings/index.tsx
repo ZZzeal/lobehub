@@ -48,7 +48,7 @@ import {
 } from '@/business/client/services/communityWorkspaceProfile';
 import EmojiPicker from '@/components/EmojiPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { usePermission } from '@/hooks/usePermission';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { useFileStore } from '@/store/file';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
@@ -295,7 +295,9 @@ const CommunityWorkspaceSettings = memo(() => {
   const { t } = useTranslation('discover');
 
   const navigate = useWorkspaceAwareNavigate();
-  const { allowed: canManageSettings, reason: permissionReason } = usePermission('manage_settings');
+  // Role-derived: the workspace community profile is `workspaceAdminProcedure`
+  // on the server, so a member's edit affordances have to start disabled.
+  const { canManageSettings } = useWorkspaceRole();
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const {
     avatarUrl: remoteAvatarUrl,
@@ -310,9 +312,7 @@ const CommunityWorkspaceSettings = memo(() => {
   } = useCommunityWorkspaceProfile();
 
   const canEdit = canManageSettings && canEditCommunityProfile && !!profile;
-  const disabledReason = !canManageSettings
-    ? permissionReason
-    : t('user.workspaceProfile.settings.noPermission');
+  const disabledReason = t('user.workspaceProfile.settings.noPermission');
 
   const [displayName, setDisplayName] = useState(remoteDisplayName ?? '');
   const [namespace, setNamespace] = useState(username ?? '');

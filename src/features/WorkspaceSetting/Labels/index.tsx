@@ -33,7 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
-import { usePermission } from '@/hooks/usePermission';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { useHomeStore } from '@/store/home';
 import { agentLabelSelectors } from '@/store/home/selectors';
 
@@ -254,13 +254,11 @@ const WorkspaceLabelsContent = memo(() => {
   // admin/owner only, with buttons visible but disabled for members
   // (consistent with the rest of the settings surface). In personal mode the
   // registry belongs to the single user who owns it, so there is nobody to
-  // gate against — `manage_settings` is a workspace-role signal and would
-  // wrongly lock a personal user out of their own labels.
+  // gate against — `useWorkspaceRole` reports `isPersonal` as owner-level.
   const activeWorkspaceId = useActiveWorkspaceId();
-  const { allowed: workspaceCanManage, reason: workspaceBlockedReason } =
-    usePermission('manage_settings');
-  const canManage = activeWorkspaceId ? workspaceCanManage : true;
-  const manageBlockedReason = activeWorkspaceId ? workspaceBlockedReason : undefined;
+  const { canManageSettings } = useWorkspaceRole();
+  const canManage = canManageSettings;
+  const manageBlockedReason = canManage ? undefined : t('workspaceSetting.labels.manageBlocked');
 
   const [keyword, setKeyword] = useState('');
   // Linear-style scope filter: the default "workspace" scope lists active
