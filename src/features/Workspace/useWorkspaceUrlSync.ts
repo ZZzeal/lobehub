@@ -8,43 +8,18 @@ import { useSilentSwitchWorkspace } from '@/business/client/hooks/useSwitchWorks
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 
 import { useWorkspaceSyncPathname } from './useWorkspaceSyncPathname';
+import { RESERVED_WORKSPACE_SLUGS } from './workspaceSlug';
 
 /**
  * Top-level route segments that share the namespace with `:workspaceSlug`.
  * Anything starting with one of these is NOT a workspace slug — even if the
  * first segment happens to resemble one.
  *
- * Kept in sync with `sharedMainAreaChildren` (paths) + the personal-only list
- * in router configs. If you add a new root path segment, add it here too.
+ * The list lives in `workspaceSlug.ts` because the same rules gate what a
+ * workspace is allowed to be named: a slug that shadows a root route could
+ * never be reached in the first place.
  */
-const RESERVED_FIRST_SEGMENTS = new Set([
-  // Shared (mirrored under /:workspaceSlug too):
-  'agent',
-  'group',
-  'community',
-  'memory',
-  'page',
-  'projects',
-  'resource',
-  'image',
-  'video',
-  'eval',
-  'tasks',
-  'task',
-  // Personal-only:
-  'a',
-  'apps',
-  // Invitation landing page: the token decides the workspace, so the segment
-  // must never be read as a slug — otherwise `/invite/xyz` renders the
-  // unknown-workspace 404 before the page can redeem the token.
-  'invite',
-  'settings',
-  'onboarding',
-  'me',
-  'share',
-  'devtools',
-  'desktop-onboarding',
-]);
+const RESERVED_FIRST_SEGMENTS = RESERVED_WORKSPACE_SLUGS;
 
 const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
 

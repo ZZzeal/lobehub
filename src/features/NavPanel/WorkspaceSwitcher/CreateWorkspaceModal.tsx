@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  isWorkspaceSlugFormatValid,
-  WORKSPACE_SLUG_MAX,
-  WORKSPACE_SLUG_MIN,
-} from '@lobechat/const';
+import { WORKSPACE_SLUG_MAX } from '@lobechat/const';
 import {
   Button,
   createModal,
@@ -22,9 +18,10 @@ import { useSWRConfig } from 'swr';
 
 import { useSwitchWorkspace } from '@/business/client/hooks/useSwitchWorkspace';
 import { WORKSPACE_LIST_SWR_KEY } from '@/business/client/hooks/useWorkspaces';
+import { getWorkspaceSlugIssue } from '@/features/Workspace/workspaceSlug';
 import { lambdaClient } from '@/libs/trpc/client';
 
-type SlugStatus = 'available' | 'checking' | 'idle' | 'invalid' | 'taken';
+type SlugStatus = 'available' | 'checking' | 'idle' | 'invalid' | 'reserved' | 'taken';
 
 /**
  * Derives a URL-safe slug from a display name. Non-latin names reduce to an
@@ -74,8 +71,12 @@ const CreateWorkspaceContent = memo(() => {
       return;
     }
 
-    if (slug.length < WORKSPACE_SLUG_MIN || !isWorkspaceSlugFormatValid(slug)) {
-      setStatus('invalid');
+    // Same rules the settings page enforces, so a slug that is accepted here
+    // can actually be opened later — a reserved segment (or a hyphen run) would
+    // otherwise create a workspace whose URL shadows a real route.
+    const issue = getWorkspaceSlugIssue(slug);
+    if (issue) {
+      setStatus(issue === 'reserved' ? 'reserved' : 'invalid');
       return;
     }
 
@@ -150,9 +151,14 @@ const CreateWorkspaceContent = memo(() => {
           />
           <Text
             fontSize={12}
-            type={status === 'taken' || status === 'invalid' ? 'danger' : 'secondary'}
+            type={
+              status === 'taken' || status === 'invalid' || status === 'reserved'
+                ? 'danger'
+                : 'secondary'
+            }
           >
             {status === 'invalid' && t('workspaceSetting.create.invalid')}
+            {status === 'reserved' && t('workspace.general.url.invalidReserved')}
             {status === 'taken' && t('workspaceSetting.create.taken')}
             {status === 'checking' && t('workspaceSetting.create.checking')}
             {(status === 'idle' || status === 'available') && t('workspaceSetting.create.slugHint')}

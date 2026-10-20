@@ -22,6 +22,8 @@
     "src/business/client/hooks/useWorkspaces.ts",
     "src/features/Workspace/useWorkspaceUrlSync.ts",
     "src/features/Workspace/useWorkspaceFromSlug.ts",
+    "src/features/Workspace/workspaceSlug.ts",
+    "src/business/client/BusinessSettingPages/WorkspaceGeneral.tsx",
     "src/hooks/useWorkspaceRole.ts",
     "src/features/NavPanel/WorkspaceSwitcher/**/*.tsx",
     "src/routes/(main)/invite/**/*.tsx"
