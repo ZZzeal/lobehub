@@ -151,7 +151,13 @@ export const createContextInner = async (params?: {
 }): Promise<AuthContext> => {
   log('createContextInner called with params: %O', params);
   const responseHeaders = new Headers();
-  if (params?.authFailure && !params.userId) {
+  // `workspace_membership_required` is reported even for an authenticated
+  // user: the request falls back to personal scope, and the client needs a
+  // signal to drop its stale workspace cookie.
+  if (
+    params?.authFailure &&
+    (!params.userId || params.authFailure === 'workspace_membership_required')
+  ) {
     setAuthFailureHeader(responseHeaders, params.authFailure);
   }
 
@@ -358,6 +364,27 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
         const oidcClientId =
           typeof tokenInfo.clientId === 'string' ? tokenInfo.clientId : undefined;
 
+        // Same membership gate as the session path: the header is
+        // caller-controlled even when the identity comes from OIDC.
+        if (workspaceId) {
+          const isActiveMember = await hasActiveWorkspaceMembership(db, {
+            userId,
+            workspaceId,
+          });
+
+          if (!isActiveMember) {
+            log('OIDC workspace membership invalid; falling back to personal context');
+
+            return createContextInner({
+              ...commonContext,
+              authFailure: 'workspace_membership_required',
+              traceContext,
+              userId,
+              workspaceId: undefined,
+            });
+          }
+        }
+
         // If OIDC authentication is successful, return context immediately
         log('OIDC authentication successful, creating context and returning');
         return createContextInner({
@@ -401,6 +428,29 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
       log('Better Auth authentication successful, userId: %s', userId);
     } else {
       log('Better Auth authentication failed, no valid session');
+    }
+
+    // Session-authenticated requests carry `X-Workspace-Id` from the client.
+    // The header is caller-controlled, so a workspace id is only honoured when
+    // the caller is still an active member. Without this check any signed-in
+    // user could address another tenant's workspace and rely on individual
+    // routers to scope by `workspaceId` (most models filter `userId` too, but
+    // shared/public rows and writes would still cross the boundary).
+    if (userId && workspaceId) {
+      const db = await getServerDB();
+      const isActiveMember = await hasActiveWorkspaceMembership(db, { userId, workspaceId });
+
+      if (!isActiveMember) {
+        log('Workspace membership invalid; falling back to personal context');
+
+        return createContextInner({
+          ...commonContext,
+          authFailure: 'workspace_membership_required',
+          traceContext,
+          userId,
+          workspaceId: undefined,
+        });
+      }
     }
 
     return createContextInner({

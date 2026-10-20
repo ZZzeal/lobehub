@@ -596,4 +596,49 @@ describe('createLambdaContext', () => {
     expect(context.userId).toBeUndefined();
     expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBe('no_token');
   });
+
+  it('keeps the workspace scope for an active member', async () => {
+    mockHasActiveWorkspaceMembership.mockResolvedValueOnce(true);
+
+    const context = await createLambdaContext(
+      new NextRequest('https://example.com/trpc/lambda', {
+        headers: { 'X-Workspace-Id': 'ws-1' },
+      }),
+    );
+
+    expect(context.userId).toBe('session-user');
+    expect(context.workspaceId).toBe('ws-1');
+    expect(mockHasActiveWorkspaceMembership).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'session-user',
+      workspaceId: 'ws-1',
+    });
+  });
+
+  it('drops the workspace scope when the session user is not a member', async () => {
+    mockHasActiveWorkspaceMembership.mockResolvedValueOnce(false);
+
+    const context = await createLambdaContext(
+      new NextRequest('https://example.com/trpc/lambda', {
+        headers: { 'X-Workspace-Id': 'ws-forged' },
+      }),
+    );
+
+    expect(context.userId).toBe('session-user');
+    expect(context.workspaceId).toBeUndefined();
+    expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBe('workspace_membership_required');
+  });
+
+  it('drops the workspace scope when an OIDC user is not a member', async () => {
+    mockHasActiveWorkspaceMembership.mockResolvedValueOnce(false);
+
+    const context = await createLambdaContext(
+      new NextRequest('https://example.com/trpc/lambda', {
+        headers: { 'Oidc-Auth': 'oidc-token', 'X-Workspace-Id': 'ws-forged' },
+      }),
+    );
+
+    expect(context.userId).toBe('oidc-user');
+    expect(context.workspaceId).toBeUndefined();
+    expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBe('workspace_membership_required');
+  });
 });

@@ -1,4 +1,12 @@
+'use client';
+
 import type { WorkspaceMemberItem } from '@lobechat/database/schemas';
+import { useEffect } from 'react';
+import useSWR from 'swr';
+
+import { lambdaClient } from '@/libs/trpc/client';
+
+import { useActiveWorkspaceId } from './useActiveWorkspaceId';
 
 export interface WorkspaceMemberUserProfile {
   avatar?: string | null;
@@ -7,19 +15,35 @@ export interface WorkspaceMemberUserProfile {
   username?: string | null;
 }
 
-/**
- * Membership row enriched with the member's display profile. The OSS build
- * has no workspace membership, so the stub returns an empty list; cloud
- * overrides this hook with the real workspace store data.
- */
 export type WorkspaceMemberWithProfile = WorkspaceMemberItem & {
   user?: WorkspaceMemberUserProfile | null;
 };
 
-export const useWorkspaceMembers = (): WorkspaceMemberWithProfile[] => [];
+export const WORKSPACE_MEMBERS_SWR_KEY = 'workspace:members';
 
 /**
- * Non-hook snapshot of the same list, for imperative callers such as tool
- * executors. Empty in OSS; cloud reads the workspace store.
+ * Synchronous snapshot for imperative callers (tool executors, gateway
+ * payloads) that cannot await SWR. Updated by the hook below.
  */
-export const getWorkspaceMembers = (): WorkspaceMemberWithProfile[] => [];
+let membersSnapshot: WorkspaceMemberWithProfile[] = [];
+
+export const useWorkspaceMembersSWR = () => {
+  const activeWorkspaceId = useActiveWorkspaceId();
+
+  const result = useSWR<WorkspaceMemberWithProfile[]>(
+    activeWorkspaceId ? [WORKSPACE_MEMBERS_SWR_KEY, activeWorkspaceId] : null,
+    () => lambdaClient.workspaceMember.list.query() as Promise<WorkspaceMemberWithProfile[]>,
+    { dedupingInterval: 0, shouldRetryOnError: false },
+  );
+
+  useEffect(() => {
+    if (result.data) membersSnapshot = result.data;
+  }, [result.data]);
+
+  return result;
+};
+
+export const useWorkspaceMembers = (): WorkspaceMemberWithProfile[] =>
+  useWorkspaceMembersSWR().data ?? [];
+
+export const getWorkspaceMembers = (): WorkspaceMemberWithProfile[] => membersSnapshot;

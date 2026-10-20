@@ -5,14 +5,18 @@ import {
 } from '@lobechat/const';
 import type { WorkspaceItem } from '@lobechat/database/schemas';
 import { TRPCError } from '@trpc/server';
+import { and, count, eq, gte, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
-import {
-  wsAdminProcedure,
-  wsCompatProcedure,
-  wsProcedure,
-} from '@/business/server/trpc-middlewares/workspaceAuth';
+import { getActiveWorkspaceMembershipRole, WorkspaceModel } from '@/database/models/workspace';
+import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
+import { agents } from '@/database/schemas/agent';
+import { messages } from '@/database/schemas/message';
+import { topics } from '@/database/schemas/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+
+import { workspaceAdminProcedure, workspaceScopedProcedure } from './_helpers/workspaceProcedure';
 
 /**
  * A workspace row as the workspace picker sees it: the stored record plus the
@@ -43,25 +47,78 @@ const workspaceStatisticsInput = z
   .object({ todayStartAt: z.string().datetime().optional() })
   .optional();
 
-const cloudOnly = (feature: string): never => {
-  throw new TRPCError({
-    code: 'NOT_IMPLEMENTED',
-    message: `${feature} is a cloud-only feature.`,
-  });
+const isUniqueViolation = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505';
+
+const startOfToday = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
 };
 
-// Cloud overrides this at the same path with the real workspaceRouter backed by cloudDB.
-// Only the procedures consumed by submodule (open-source) UI and by the CLI are declared
-// here as typed no-op stubs so the contract type-checks; cloud supplies the real
-// implementations. Keep the procedure builders and input schemas aligned with
-// `apps/server/src/routers/lambda/workspace.ts` in the cloud repo — the point of a stub
-// is to represent that contract, so a looser gate here is a real runtime difference.
+const countAgents = async (db: any, workspaceId: string, userId?: string) => {
+  const filters = [eq(agents.workspaceId, workspaceId), isNull(agents.deletedAt)];
+  if (userId) filters.push(eq(agents.userId, userId));
+  const [row] = await db
+    .select({ total: count() })
+    .from(agents)
+    .where(and(...filters));
+  return Number(row?.total ?? 0);
+};
+
+const countMessages = async (db: any, workspaceId: string, since: Date, userId?: string) => {
+  const filters = [eq(messages.workspaceId, workspaceId), gte(messages.createdAt, since)];
+  if (userId) filters.push(eq(messages.userId, userId));
+  const [row] = await db
+    .select({ total: count() })
+    .from(messages)
+    .where(and(...filters));
+  return Number(row?.total ?? 0);
+};
+
+const countTopics = async (db: any, workspaceId: string, userId?: string) => {
+  const filters = [eq(topics.workspaceId, workspaceId)];
+  if (userId) filters.push(eq(topics.userId, userId));
+  const [row] = await db
+    .select({ total: count() })
+    .from(topics)
+    .where(and(...filters));
+  return Number(row?.total ?? 0);
+};
+
+const getStatistics = async (
+  db: any,
+  workspaceId: string,
+  todayStartAt?: string,
+  userId?: string,
+): Promise<WorkspaceStatistics> => {
+  const since = todayStartAt ? new Date(todayStartAt) : startOfToday();
+  const [agentTotal, messageTotal, messageToday, topicTotal] = await Promise.all([
+    countAgents(db, workspaceId, userId),
+    countMessages(db, workspaceId, new Date(0), userId),
+    countMessages(db, workspaceId, since, userId),
+    countTopics(db, workspaceId, userId),
+  ]);
+
+  return {
+    agents: agentTotal,
+    messages: messageTotal,
+    messagesToday: messageToday,
+    topics: topicTotal,
+  };
+};
+
 export const workspaceRouter = router({
   checkSlugAvailable: authedProcedure
+    .use(serverDatabase)
     .input(z.object({ slug: z.string().min(WORKSPACE_SLUG_MIN).max(WORKSPACE_SLUG_MAX) }))
-    .query((): { available: boolean } => ({ available: false })),
+    .query(async ({ ctx, input }): Promise<{ available: boolean }> => {
+      const existing = await new WorkspaceModel(ctx.serverDB, ctx.userId).findBySlug(input.slug);
+      return { available: !existing };
+    }),
 
   create: authedProcedure
+    .use(serverDatabase)
     .input(
       z.object({
         avatar: z.string().optional(),
@@ -70,36 +127,97 @@ export const workspaceRouter = router({
         slug: workspaceSlugSchema,
       }),
     )
-    .mutation(async (): Promise<WorkspaceItem> => cloudOnly('Workspace creation')),
+    .mutation(async ({ ctx, input }): Promise<WorkspaceItem> => {
+      const model = new WorkspaceModel(ctx.serverDB, ctx.userId);
 
-  ensureMarketOrganization: authedProcedure
-    .input(z.object({ autoProvision: z.boolean().optional() }).optional())
-    .mutation(async (): Promise<{ created: boolean; marketAccountId: number }> => {
-      throw new TRPCError({
-        code: 'NOT_IMPLEMENTED',
-        message: 'Workspace market organization is a cloud-only feature.',
-      });
+      if (await model.findBySlug(input.slug)) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'workspace-slug-taken' });
+      }
+
+      let workspace: WorkspaceItem;
+      try {
+        workspace = await model.create(input);
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'workspace-slug-taken', cause: error });
+        }
+        throw error;
+      }
+
+      await new WorkspaceAuditLogModel(ctx.serverDB)
+        .create({
+          action: 'workspace.created',
+          ipAddress: ctx.clientIp ?? undefined,
+          metadata: { name: workspace.name, slug: workspace.slug },
+          resourceId: workspace.id,
+          resourceType: 'workspace',
+          userId: ctx.userId,
+          workspaceId: workspace.id,
+        })
+        .catch((error) => {
+          console.error('[workspace:create] audit failed', error);
+        });
+
+      return workspace;
     }),
 
-  // `wsCompatProcedure` here, unlike cloud's `wsProcedure`, because open-source
-  // callers (`buildAppUrl`) reach for it before they know whether a workspace
-  // is in scope.
-  getById: wsCompatProcedure.query((): WorkspaceItem | null => null),
+  /**
+   * Open-source deployments have no market/billing integration; keep the
+   * procedure so the UI does not crash, but report that nothing was provisioned.
+   */
+  ensureMarketOrganization: authedProcedure
+    .input(z.object({ autoProvision: z.boolean().optional() }).optional())
+    .mutation(async (): Promise<{ created: boolean; marketAccountId: number }> => ({
+      created: false,
+      marketAccountId: 0,
+    })),
 
-  getMyStatistics: wsProcedure
+  // `wsCompatProcedure` semantics: callers (`buildAppUrl`) ask before they know
+  // whether a workspace is in scope, so an unscoped / non-member call is null
+  // rather than an error.
+  getById: authedProcedure
+    .use(serverDatabase)
+    .query(async ({ ctx }): Promise<WorkspaceItem | null> => {
+      if (!ctx.workspaceId) return null;
+
+      const role = await getActiveWorkspaceMembershipRole(ctx.serverDB, {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      if (!role) return null;
+
+      return (await new WorkspaceModel(ctx.serverDB, ctx.userId).findById(ctx.workspaceId)) ?? null;
+    }),
+
+  getMyStatistics: workspaceScopedProcedure
     .input(workspaceStatisticsInput)
-    .query((): WorkspaceStatistics | null => null),
+    .query(async ({ ctx, input }): Promise<WorkspaceStatistics> =>
+      getStatistics(ctx.serverDB, ctx.workspaceId, input?.todayStartAt, ctx.userId),
+    ),
 
-  getSettings: wsProcedure.query((): Record<string, unknown> => ({})),
+  getSettings: workspaceScopedProcedure.query(
+    async ({ ctx }): Promise<Record<string, unknown>> =>
+      (await new WorkspaceModel(ctx.serverDB, ctx.userId).getSettings(ctx.workspaceId)) as Record<
+        string,
+        unknown
+      >,
+  ),
 
   /** Workspace-wide totals across all members — Admin or higher, like cloud. */
-  getStatistics: wsAdminProcedure
+  getStatistics: workspaceAdminProcedure
     .input(workspaceStatisticsInput)
-    .query((): WorkspaceStatistics | null => null),
+    .query(async ({ ctx, input }): Promise<WorkspaceStatistics> =>
+      getStatistics(ctx.serverDB, ctx.workspaceId, input?.todayStartAt),
+    ),
 
-  list: authedProcedure.query(async (): Promise<WorkspaceMembershipSummary[]> => []),
+  list: authedProcedure
+    .use(serverDatabase)
+    .query(async ({ ctx }): Promise<WorkspaceMembershipSummary[]> => {
+      const rows = await new WorkspaceModel(ctx.serverDB, ctx.userId).listUserWorkspaces();
+      return rows.map((row) => ({ ...row, plan: 'self-hosted' }));
+    }),
 
-  update: wsAdminProcedure
+  update: workspaceAdminProcedure
     .input(
       z.object({
         avatar: z.string().optional(),
@@ -108,5 +226,28 @@ export const workspaceRouter = router({
         slug: workspaceSlugSchema.optional(),
       }),
     )
-    .mutation(async (): Promise<void> => cloudOnly('Workspace update')),
+    .mutation(async ({ ctx, input }): Promise<void> => {
+      if (input.slug) {
+        const existing = await new WorkspaceModel(ctx.serverDB, ctx.userId).findBySlug(input.slug);
+        if (existing && existing.id !== ctx.workspaceId) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'workspace-slug-taken' });
+        }
+      }
+
+      await new WorkspaceModel(ctx.serverDB, ctx.userId).update(ctx.workspaceId, input);
+
+      await new WorkspaceAuditLogModel(ctx.serverDB)
+        .create({
+          action: 'workspace.updated',
+          ipAddress: ctx.clientIp ?? undefined,
+          metadata: input,
+          resourceId: ctx.workspaceId,
+          resourceType: 'workspace',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+        .catch((error) => {
+          console.error('[workspace:update] audit failed', error);
+        });
+    }),
 });

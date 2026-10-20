@@ -1,1 +1,5 @@
-export const useHasWorkspace = (): boolean => false;
+'use client';
+
+import { useWorkspaces } from './useWorkspaces';
+
+export const useHasWorkspace = (): boolean => useWorkspaces().length > 0;

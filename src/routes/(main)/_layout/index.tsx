@@ -17,6 +17,7 @@ import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanelShell from '@/features/NavPanel/Shell';
 import { DndContextWrapper } from '@/features/ResourceManager/DndContextWrapper';
 import { RouteMetaBridge } from '@/features/RouteMeta';
+import { useWorkspaceUrlSync } from '@/features/Workspace/useWorkspaceUrlSync';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
@@ -33,6 +34,16 @@ import { styles } from './style';
 const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
 const GlobalApprovalNotification = dynamic(() => import('@/features/GlobalApprovalNotification'));
 
+/**
+ * Keeps the active workspace store in sync with the `/:workspaceSlug` route.
+ * The cloud build mounts the same reconciliation inside `WorkspaceContextSlot`.
+ */
+const WorkspaceRouteSync = () => {
+  useWorkspaceUrlSync();
+
+  return null;
+};
+
 // The Electron shell (title bar, tab bridges, overlays, zoom HUD) lives in
 // index.desktop.tsx; only the auth recovery pair stays here so a desktop build
 // that falls back to this layout can still re-login.
@@ -45,6 +56,7 @@ const Layout: FC = () => {
       {isDesktop && <DesktopAutoOidcOnFirstOpen />}
       {isDesktop && <AuthRequiredModal />}
       <WorkspaceContextSlot>
+        <WorkspaceRouteSync />
         <RouteMetaBridge />
         <Suspense fallback={null}>{showCloudPromotion && <CloudBanner />}</Suspense>
         <DndContextWrapper>

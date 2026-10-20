@@ -1,3 +1,10 @@
-// OSS default: no viewer role concept, every user has full member access.
-// Cloud overrides this with the real workspace-role lookup.
-export const useIsWorkspaceViewer = (): boolean => false;
+'use client';
+
+import { useActiveWorkspace } from './useActiveWorkspace';
+
+/** Read-only members see no write affordances; personal context is never read-only. */
+export const useIsWorkspaceViewer = (): boolean => {
+  const workspace = useActiveWorkspace();
+
+  return workspace?.role === 'viewer';
+};
