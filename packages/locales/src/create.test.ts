@@ -53,6 +53,15 @@ describe('createI18nNext', () => {
     expect(init.mock.calls[0]![0].react).not.toHaveProperty('bindI18nStore');
   });
 
+  it('keeps `setting` in the default chain, behind common and chat', () => {
+    createI18nNext('zh-CN').init();
+
+    // Without it, a component that forgot `useTranslation('setting')` renders the
+    // raw `workspaceSetting.*` key instead of the copy. The position is part of the
+    // contract: common/chat win for the handful of keys both bundles define.
+    expect(init.mock.calls[0]![0].defaultNS).toEqual(['error', 'common', 'chat', 'setting']);
+  });
+
   it('emits one languageChanged after the fallback resources are replaced', async () => {
     await createI18nNext('zh-CN').init();
     await vi.waitFor(() => expect(reloadResources).toHaveBeenCalled());

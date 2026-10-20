@@ -89,7 +89,12 @@ export const createI18nNext = (lang?: string) => {
 
       const initPromise = instance.init({
         debug: debugMode,
-        defaultNS: ['error', 'common', 'chat'],
+        // `setting` sits last on purpose: a `t('workspaceSetting.*')` call in a
+        // component that forgot to pass its namespace now resolves instead of
+        // rendering the raw key. Keeping it behind `common`/`chat` also preserves
+        // the copy for the few keys those bundles share (`tab.image`, `tab.memory`,
+        // `tab.profile`, `memory.title`, `memory.effort.*`).
+        defaultNS: ['error', 'common', 'chat', 'setting'],
         fallbackLng: DEFAULT_LANG,
         initAsync,
         // Keep init synchronous so components can render with bundled en-US resources
